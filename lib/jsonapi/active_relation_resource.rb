@@ -3,7 +3,6 @@
 module JSONAPI
   class ActiveRelationResource < BasicResource
     include CrossSchemaRelationships
-    include ActiveRelationResourceExtensions
 
     root_resource
 
