@@ -3,6 +3,7 @@
 module JSONAPI
   class ActiveRelationResource < BasicResource
     include CrossSchemaRelationships
+    include ActiveRelationResourceExtensions
 
     root_resource
 
@@ -522,6 +523,11 @@ module JSONAPI
       def find_related_polymorphic_fragments(source_fragments, relationship, options, connect_source_identity)
         filters = options.fetch(:filters, {})
         source_ids = source_fragments.collect {|item| item.identity.id}
+
+        # Handle case where relationship is passed as a symbol/string instead of a Relationship object
+        if relationship.is_a?(Symbol) || relationship.is_a?(String)
+          relationship = _relationship(relationship.to_sym)
+        end
 
         resource_klass = relationship.resource_klass
         include_directives = options.fetch(:include_directives, {})

@@ -17,7 +17,12 @@ module JSONAPI
       @source         = options[:source]
       @links          = options[:links]
 
-      @status         = Rack::Utils::SYMBOL_TO_STATUS_CODE[options[:status]].to_s
+      @status         = if options[:status]
+                          code = Rack::Utils::SYMBOL_TO_STATUS_CODE[options[:status]]
+                          code ? code.to_s : options[:status].to_s
+                        else
+                          nil
+                        end
       @meta           = options[:meta]
     end
 
@@ -48,7 +53,8 @@ module JSONAPI
 
       if error_object_overrides[:status]
         # :nocov:
-        @status         = Rack::Utils::SYMBOL_TO_STATUS_CODE[error_object_overrides[:status]].to_s
+        code = Rack::Utils::SYMBOL_TO_STATUS_CODE[error_object_overrides[:status]]
+        @status = code ? code.to_s : error_object_overrides[:status].to_s
         # :nocov:
       end
       @meta           = error_object_overrides[:meta] || @meta
