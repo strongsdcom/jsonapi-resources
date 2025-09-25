@@ -23,7 +23,6 @@ end
 ENV['DATABASE_URL'] ||= "sqlite3:test_db"
 
 require 'active_record/railtie'
-require 'rails/test_help'
 require 'minitest/mock'
 require 'jsonapi-resources'
 require 'pry'
@@ -60,7 +59,12 @@ class TestApp < Rails::Application
   config.action_controller.action_on_unpermitted_parameters = :raise
 
   ActiveRecord::Schema.verbose = false
-  config.active_record.schema_format = :none
+  # Rails 8 doesn't support :none schema_format
+  if Rails::VERSION::MAJOR < 8
+    config.active_record.schema_format = :none
+  else
+    config.active_record.schema_format = :ruby
+  end
   config.active_support.test_order = :random
 
   config.active_support.halt_callback_chains_on_return_false = false
@@ -70,6 +74,12 @@ class TestApp < Rails::Application
     config.active_record.sqlite3.represent_boolean_as_integer = true
   end
 end
+
+# Initialize the test application before requiring test_help in Rails 8
+TestApp.initialize!
+
+# Now require test_help after Rails.application is initialized
+require 'rails/test_help'
 
 DatabaseCleaner.allow_remote_database_url = true
 DatabaseCleaner.strategy = :transaction
@@ -193,8 +203,6 @@ def show_queries
     puts "sql[#{index}]: #{query}"
   end
 end
-
-TestApp.initialize!
 
 require File.expand_path('../fixtures/active_record', __FILE__)
 

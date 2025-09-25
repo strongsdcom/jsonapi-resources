@@ -241,7 +241,14 @@ module JSONAPI
     end
 
     def allow_include=(allow_include)
-      ActiveSupport::Deprecation.warn('`allow_include` has been replaced by `default_allow_include_to_one` and `default_allow_include_to_many` options.')
+      message = '`allow_include` has been replaced by `default_allow_include_to_one` and `default_allow_include_to_many` options.'
+      if Rails::VERSION::MAJOR >= 8 && Rails.application && Rails.application.deprecators[:jsonapi_resources]
+        Rails.application.deprecators[:jsonapi_resources].warn(message)
+      elsif Rails::VERSION::MAJOR < 8
+        ActiveSupport::Deprecation.warn(message)
+      else
+        warn message
+      end
       @default_allow_include_to_one = allow_include
       @default_allow_include_to_many = allow_include
     end

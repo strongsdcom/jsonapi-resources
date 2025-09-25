@@ -547,7 +547,12 @@ module JSONAPI
         check_reserved_attribute_name(attr)
 
         if (attr == :id) && (options[:format].nil?)
-          ActiveSupport::Deprecation.warn('Id without format is no longer supported. Please remove ids from attributes, or specify a format.')
+          message = 'Id without format is no longer supported. Please remove ids from attributes, or specify a format.'
+          if Rails::VERSION::MAJOR >= 8 && Rails.application && Rails.application.deprecators[:jsonapi_resources]
+            Rails.application.deprecators[:jsonapi_resources].warn(message)
+          elsif Rails::VERSION::MAJOR < 8
+            ActiveSupport::Deprecation.warn(message)
+          end
         end
 
         check_duplicate_attribute_name(attr) if options[:format].nil?

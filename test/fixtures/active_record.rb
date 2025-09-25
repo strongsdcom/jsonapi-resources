@@ -57,7 +57,7 @@ ActiveRecord::Schema.define do
   end
 
   create_table :posts, force: true do |t|
-    t.string     :title, length: 255
+    t.string     :title, limit: 255
     t.text       :body
     t.integer    :author_id
     t.integer    :parent_post_id
@@ -329,8 +329,13 @@ ActiveRecord::Schema.define do
 
   create_table :related_things, force: true  do |t|
     t.string :name
-    t.references :from, references: :thing
-    t.references :to, references: :thing
+    if Rails::VERSION::MAJOR >= 8
+      t.references :from, foreign_key: { to_table: :things }
+      t.references :to, foreign_key: { to_table: :things }
+    else
+      t.references :from, references: :thing
+      t.references :to, references: :thing
+    end
 
     t.timestamps null: false
   end
