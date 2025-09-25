@@ -13,6 +13,8 @@ platforms :ruby do
 
   if version.start_with?('4.2', '5.0')
     gem 'sqlite3', '~> 1.3.13'
+  elsif version == 'default' || version == 'master' || version.start_with?('8.')
+    gem 'sqlite3', '~> 2.1'
   else
     gem 'sqlite3', '~> 1.4'
   end

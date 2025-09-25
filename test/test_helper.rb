@@ -42,7 +42,11 @@ JSONAPI.configure do |config|
   config.json_key_format = :camelized_key
 end
 
-ActiveSupport::Deprecation.silenced = true
+if Rails::VERSION::MAJOR >= 8
+  Rails.application.deprecators.silenced = true if Rails.application
+else
+  ActiveSupport::Deprecation.silenced = true
+end
 
 puts "Testing With RAILS VERSION #{Rails.version}"
 
@@ -460,12 +464,20 @@ class Minitest::Test
     true
   end
 
-  self.fixture_path = "#{Rails.root}/fixtures"
+  if Rails::VERSION::MAJOR >= 8
+    self.fixture_paths = ["#{Rails.root}/fixtures"]
+  else
+    self.fixture_path = "#{Rails.root}/fixtures"
+  end
   fixtures :all
 end
 
 class ActiveSupport::TestCase
-  self.fixture_path = "#{Rails.root}/fixtures"
+  if Rails::VERSION::MAJOR >= 8
+    self.fixture_paths = ["#{Rails.root}/fixtures"]
+  else
+    self.fixture_path = "#{Rails.root}/fixtures"
+  end
   fixtures :all
   setup do
     @routes = TestApp.routes
@@ -473,7 +485,11 @@ class ActiveSupport::TestCase
 end
 
 class ActionDispatch::IntegrationTest
-  self.fixture_path = "#{Rails.root}/fixtures"
+  if Rails::VERSION::MAJOR >= 8
+    self.fixture_paths = ["#{Rails.root}/fixtures"]
+  else
+    self.fixture_path = "#{Rails.root}/fixtures"
+  end
   fixtures :all
 
   def assert_jsonapi_response(expected_status, msg = nil)

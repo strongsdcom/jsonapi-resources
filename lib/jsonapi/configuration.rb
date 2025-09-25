@@ -247,12 +247,20 @@ module JSONAPI
     end
 
     def whitelist_all_exceptions=(allow_all_exceptions)
-      ActiveSupport::Deprecation.warn('`whitelist_all_exceptions` has been replaced by `allow_all_exceptions`')
+      if defined?(Rails.deprecator)
+        Rails.deprecator.warn('`whitelist_all_exceptions` has been replaced by `allow_all_exceptions`')
+      elsif ActiveSupport::Deprecation.respond_to?(:warn)
+        ActiveSupport::Deprecation.warn('`whitelist_all_exceptions` has been replaced by `allow_all_exceptions`')
+      end
       @allow_all_exceptions = allow_all_exceptions
     end
 
     def exception_class_whitelist=(exception_class_allowlist)
-      ActiveSupport::Deprecation.warn('`exception_class_whitelist` has been replaced by `exception_class_allowlist`')
+      if defined?(Rails.deprecator)
+        Rails.deprecator.warn('`exception_class_whitelist` has been replaced by `exception_class_allowlist`')
+      elsif ActiveSupport::Deprecation.respond_to?(:warn)
+        ActiveSupport::Deprecation.warn('`exception_class_whitelist` has been replaced by `exception_class_allowlist`')
+      end
       @exception_class_allowlist = exception_class_allowlist
     end
 

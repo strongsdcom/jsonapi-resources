@@ -2,6 +2,8 @@
 
 module JSONAPI
   class ActiveRelationResource < BasicResource
+    include CrossSchemaRelationships
+
     root_resource
 
     def find_related_ids(relationship, options = {})

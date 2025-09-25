@@ -609,11 +609,17 @@ module JSONAPI
       end
 
       def belongs_to(*attrs)
-        ActiveSupport::Deprecation.warn "In #{name} you exposed a `has_one` relationship "\
-                                        " using the `belongs_to` class method. We think `has_one`" \
-                                        " is more appropriate. If you know what you're doing," \
-                                        " and don't want to see this warning again, override the" \
-                                        " `belongs_to` class method on your resource."
+        message = "In #{name} you exposed a `has_one` relationship "\
+                  " using the `belongs_to` class method. We think `has_one`" \
+                  " is more appropriate. If you know what you're doing," \
+                  " and don't want to see this warning again, override the" \
+                  " `belongs_to` class method on your resource."
+
+        if Rails::VERSION::MAJOR >= 8 && Rails.application && Rails.application.deprecators[:jsonapi_resources]
+          Rails.application.deprecators[:jsonapi_resources].warn(message)
+        elsif Rails::VERSION::MAJOR < 8
+          ActiveSupport::Deprecation.warn(message)
+        end
         _add_relationship(Relationship::ToOne, *attrs)
       end
 

@@ -8,6 +8,11 @@ ActiveSupport::Inflector.inflections(:en) do |inflect|
 end
 
 ### DATABASE
+# Rails 8 requires special handling for foreign keys in SQLite during schema creation
+if Rails::VERSION::MAJOR >= 8 && ActiveRecord::Base.connection.adapter_name == 'SQLite'
+  ActiveRecord::Base.connection.execute("PRAGMA foreign_keys = OFF")
+end
+
 ActiveRecord::Schema.define do
   create_table :sessions, id: false, force: true do |t|
     t.string :id, :limit => 36, :primary_key => true, null: false
@@ -429,6 +434,11 @@ ActiveRecord::Schema.define do
     t.integer :version
     t.timestamps null: false
   end
+end
+
+# Re-enable foreign keys for SQLite after schema creation in Rails 8
+if Rails::VERSION::MAJOR >= 8 && ActiveRecord::Base.connection.adapter_name == 'SQLite'
+  ActiveRecord::Base.connection.execute("PRAGMA foreign_keys = ON")
 end
 
 ### MODELS
