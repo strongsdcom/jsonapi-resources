@@ -1,17 +1,2 @@
-recruiter_robert:
-  id: 1
-  first_name: Robert
-  last_name: Khromei
-  email: robert@example.com
-
-recruiter_alice:
-  id: 2
-  first_name: Alice
-  last_name: Smith
-  email: alice@example.com
-
-manager_bob:
-  id: 3
-  first_name: Bob
-  last_name: Johnson
-  email: bob@example.com
+# Empty fixtures for cross-schema tests
+# These tables are used only in cross_schema_linkage_test.rb

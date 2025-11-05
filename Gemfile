@@ -25,7 +25,8 @@ when 'master'
   gem 'railties', { git: 'https://github.com/rails/rails.git' }
   gem 'arel', { git: 'https://github.com/rails/arel.git' }
 when 'default'
-  gem 'railties', '>= 6.0'
+  gem 'railties', '~> 8.0.0'
+  gem 'activerecord', '~> 8.0.0'
 else
   gem 'railties', "~> #{version}"
 end

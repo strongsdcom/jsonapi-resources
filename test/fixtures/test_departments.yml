@@ -1,9 +1,2 @@
-engineering_dept:
-  id: 1
-  name: Engineering
-  manager_id: 3
-
-hr_dept:
-  id: 2
-  name: Human Resources
-  manager_id: 2
+# Empty fixtures for cross-schema tests
+# These tables are used only in cross_schema_linkage_test.rb

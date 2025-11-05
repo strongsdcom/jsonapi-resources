@@ -1,7 +1,2 @@
-acme_corp:
-  id: 1
-  name: ACME Corp
-
-other_corp:
-  id: 2
-  name: Other Corp
+# Empty fixtures for cross-schema tests
+# These tables are used only in cross_schema_linkage_test.rb

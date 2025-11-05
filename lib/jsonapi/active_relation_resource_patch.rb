@@ -131,9 +131,6 @@ module JSONAPI
         # For has_many with cross-schema
         related_klass = relationship.resource_klass
 
-        # Determine the foreign key based on the source model
-        foreign_key = "#{_type.to_s.singularize}_id"
-
         # Get source IDs
         source_ids = source_records.map { |r| r._model.send(_primary_key) }.compact.uniq
 
@@ -144,17 +141,45 @@ module JSONAPI
         base_table_name = related_model_class.table_name.split('.').last  # Remove schema if present
         full_table_name = "#{schema}.#{base_table_name}"
 
-        # For has_many employees, we need to handle the join table or direct relationship
-        # Query with WHERE clause to filter by foreign key
-        sql = "SELECT * FROM #{full_table_name} WHERE #{foreign_key} IN (?)"
-        related_records = ActiveRecord::Base.connection.exec_query(
-          ActiveRecord::Base.send(:sanitize_sql_array, [sql, source_ids])
-        )
+        # Check if this is a has_many :through relationship
+        source_model_class = _model_class
+        ar_reflection = source_model_class.reflect_on_association(relationship.relation_name(options))
+
+        is_through = ar_reflection && ar_reflection.through_reflection
+
+        if is_through
+          # Handle has_many :through relationships
+          through_reflection = ar_reflection.through_reflection
+          through_table = through_reflection.table_name
+          source_foreign_key = through_reflection.foreign_key
+          target_foreign_key = ar_reflection.source_reflection.foreign_key
+
+          # Join through the intermediate table and include source FK for grouping
+          sql = <<-SQL
+            SELECT related.*, through_table.#{source_foreign_key} AS __source_fk
+            FROM #{full_table_name} AS related
+            INNER JOIN #{through_table} AS through_table
+              ON related.#{related_model_class.primary_key} = through_table.#{target_foreign_key}
+            WHERE through_table.#{source_foreign_key} IN (?)
+          SQL
+          related_records = ActiveRecord::Base.connection.exec_query(
+            ActiveRecord::Base.send(:sanitize_sql_array, [sql, source_ids])
+          )
+        else
+          # Direct has_many relationship - use foreign key
+          foreign_key = "#{_type.to_s.singularize}_id"
+          sql = "SELECT * FROM #{full_table_name} WHERE #{foreign_key} IN (?)"
+          related_records = ActiveRecord::Base.connection.exec_query(
+            ActiveRecord::Base.send(:sanitize_sql_array, [sql, source_ids])
+          )
+        end
 
         # Group related records by source_id for linkage
         related_by_source = {}
         related_records.each do |record_hash|
-          source_id = record_hash[foreign_key]
+          # For through relationships, use the __source_fk we selected
+          # For direct relationships, use the foreign_key from the record
+          source_id = is_through ? record_hash['__source_fk'] : record_hash[foreign_key]
           related_by_source[source_id] ||= []
           related_by_source[source_id] << record_hash
         end
@@ -167,7 +192,9 @@ module JSONAPI
 
           records_for_source.each do |record_hash|
             # Create a model instance from the hash using the related model class
-            model_instance = related_model_class.instantiate(record_hash)
+            # Remove the __source_fk field if present (added for grouping in through relationships)
+            clean_record_hash = record_hash.except('__source_fk')
+            model_instance = related_model_class.instantiate(clean_record_hash)
             resource = related_klass.new(model_instance, options[:context])
             rid = JSONAPI::ResourceIdentity.new(related_klass, model_instance.id)
             fragments[rid] = JSONAPI::ResourceFragment.new(rid, resource: resource)

@@ -24,6 +24,8 @@ ENV['DATABASE_URL'] ||= "sqlite3:test_db"
 
 require 'active_record/railtie'
 require 'minitest/mock'
+# Load local version instead of installed gem
+$LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
 require 'jsonapi-resources'
 require 'pry'
 
@@ -41,9 +43,8 @@ JSONAPI.configure do |config|
   config.json_key_format = :camelized_key
 end
 
-if Rails::VERSION::MAJOR >= 8
-  Rails.application.deprecators.silenced = true if Rails.application
-else
+# Silence deprecation warnings for Rails 8.0
+if defined?(ActiveSupport::Deprecation) && ActiveSupport::Deprecation.respond_to?(:silenced=)
   ActiveSupport::Deprecation.silenced = true
 end
 

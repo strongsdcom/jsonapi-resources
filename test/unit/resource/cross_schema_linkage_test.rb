@@ -1,6 +1,18 @@
 require File.expand_path('../../../test_helper', __FILE__)
 
 class CrossSchemaLinkageTest < ActiveSupport::TestCase
+  # Disable fixtures for this test class since we create data manually
+  self.use_transactional_tests = false
+
+  # Override to prevent fixtures from loading
+  def setup_fixtures
+    # Do nothing - we don't use fixtures in this test
+  end
+
+  # Override to prevent fixtures teardown errors
+  def teardown_fixtures
+    # Do nothing - we don't use fixtures in this test
+  end
   # Define models for testing
   class TestUser < ActiveRecord::Base
     self.table_name = 'test_users'
@@ -24,6 +36,18 @@ class CrossSchemaLinkageTest < ActiveSupport::TestCase
   class TestCompany < ActiveRecord::Base
     self.table_name = 'test_companies'
     has_many :employees, class_name: 'CrossSchemaLinkageTest::TestUser', foreign_key: 'company_id'
+  end
+
+  class TestProject < ActiveRecord::Base
+    self.table_name = 'test_projects'
+    has_many :project_members, class_name: 'CrossSchemaLinkageTest::TestProjectMember', foreign_key: 'test_project_id'
+    has_many :members, through: :project_members, source: :user, class_name: 'CrossSchemaLinkageTest::TestUser'
+  end
+
+  class TestProjectMember < ActiveRecord::Base
+    self.table_name = 'test_project_members'
+    belongs_to :project, class_name: 'CrossSchemaLinkageTest::TestProject', foreign_key: 'test_project_id'
+    belongs_to :user, class_name: 'CrossSchemaLinkageTest::TestUser', foreign_key: 'test_user_id'
   end
 
   # Define JSONAPI Resources
@@ -59,7 +83,17 @@ class CrossSchemaLinkageTest < ActiveSupport::TestCase
     has_many :employees, class_name: 'TestUser', schema: 'hr_schema', exclude_links: :default
   end
 
+  class TestProjectResource < JSONAPI::ActiveRelationResource
+    model_name 'CrossSchemaLinkageTest::TestProject'
+    attributes :name
+
+    has_many :members, class_name: 'TestUser', schema: 'core_api', exclude_links: :default
+  end
+
   def setup
+    # Cross-schema functionality only works with PostgreSQL
+    skip "Cross-schema tests require PostgreSQL" unless ActiveRecord::Base.connection.adapter_name == 'PostgreSQL'
+
     DatabaseCleaner.start
     @user = TestUser.create!(first_name: 'Robert', last_name: 'Khromei', email: 'robert@example.com')
     @user2 = TestUser.create!(first_name: 'Alice', last_name: 'Smith', email: 'alice@example.com')
@@ -67,6 +101,7 @@ class CrossSchemaLinkageTest < ActiveSupport::TestCase
     @candidate = TestCandidate.create!(full_name: 'John Doe', email: 'john@example.com', recruiter_id: @user.id, location_id: @location.id)
     @department = TestDepartment.create!(name: 'Engineering', manager_id: @user.id)
     @company = TestCompany.create!(name: 'ACME Corp')
+    @project = TestProject.create!(name: 'Website Redesign')
   end
 
   def teardown
@@ -347,6 +382,138 @@ class CrossSchemaLinkageTest < ActiveSupport::TestCase
     # User should appear only once in fragments
     user_fragments = fragments.select { |rid, _| rid.resource_klass == TestUserResource }
     assert_equal 1, user_fragments.size, "User should appear only once in fragments"
+  end
+
+  # === has_many :through cross-schema tests ===
+
+  def test_has_many_through_cross_schema_creates_linkage_data
+    # Test that has_many :through cross-schema relationship properly sets linkage data
+    # This tests the specific code path in handle_cross_schema_to_many that handles :through relationships
+
+    # Add members to project via join table
+    TestProjectMember.create!(test_project_id: @project.id, test_user_id: @user.id, role: 'developer')
+    TestProjectMember.create!(test_project_id: @project.id, test_user_id: @user2.id, role: 'manager')
+
+    resource = TestProjectResource.new(@project, nil)
+    serializer = JSONAPI::ResourceSerializer.new(TestProjectResource, include: ['members'])
+    json = serializer.serialize_to_hash(resource)
+
+    # Check members relationship (cross-schema has_many :through)
+    members_rel = json['data']['relationships']['members']
+    assert_not_nil members_rel, "Members relationship should exist"
+    assert_not_nil members_rel['data'], "Members linkage data should NOT be null"
+    assert members_rel['data'].is_a?(Array), "has_many :through linkage should be an array"
+    assert_equal 2, members_rel['data'].size, "Should have 2 members"
+
+    # Verify user IDs in linkage
+    member_ids = members_rel['data'].map { |link| link['id'] }.sort
+    assert_equal [@user.id.to_s, @user2.id.to_s].sort, member_ids
+
+    # Verify type is correct
+    members_rel['data'].each do |link|
+      assert_equal 'test-users', link['type'], "Member type should be test-users"
+    end
+
+    # Verify all members are in included
+    assert_not_nil json['included'], "Should have included section"
+    included_users = json['included'].select { |inc| inc['type'] == 'test-users' }
+    assert_equal 2, included_users.size, "Should have 2 users in included"
+
+    # Verify user attributes
+    robert = included_users.find { |u| u['id'] == @user.id.to_s }
+    assert_not_nil robert, "Robert should be in included"
+    assert_equal 'Robert', robert['attributes']['first-name']
+
+    alice = included_users.find { |u| u['id'] == @user2.id.to_s }
+    assert_not_nil alice, "Alice should be in included"
+    assert_equal 'Alice', alice['attributes']['first-name']
+  end
+
+  def test_has_many_through_cross_schema_with_array_source
+    # Test has_many :through with Array source
+    TestProjectMember.create!(test_project_id: @project.id, test_user_id: @user.id, role: 'developer')
+    TestProjectMember.create!(test_project_id: @project.id, test_user_id: @user2.id, role: 'manager')
+
+    source_identity = JSONAPI::ResourceIdentity.new(TestProjectResource, @project.id)
+    source_fragment = JSONAPI::ResourceFragment.new(source_identity)
+
+    fragments = TestProjectResource.find_included_fragments(
+      [source_fragment],
+      :members,
+      { context: nil }
+    )
+
+    # Check that linkage was added
+    assert_not_nil source_fragment.related[:members], "Should have members linkage"
+    member_identities = source_fragment.related[:members].to_a
+    assert_equal 2, member_identities.size, "Should have 2 member identities"
+
+    member_ids = member_identities.map(&:id).sort
+    assert_equal [@user.id, @user2.id].sort, member_ids
+
+    # Verify fragments were created
+    assert_equal 2, fragments.size, "Should have 2 user fragments"
+  end
+
+  def test_has_many_through_cross_schema_empty_collection
+    # Test has_many :through when there are no related records
+    empty_project = TestProject.create!(name: 'Empty Project')
+
+    resource = TestProjectResource.new(empty_project, nil)
+    serializer = JSONAPI::ResourceSerializer.new(TestProjectResource, include: ['members'])
+    json = serializer.serialize_to_hash(resource)
+
+    members_rel = json['data']['relationships']['members']
+    assert_not_nil members_rel, "Members relationship should exist"
+    # For empty has_many, data should be empty array (or possibly null depending on config)
+    assert members_rel['data'].nil? || members_rel['data'] == [], "Empty has_many :through should have empty or null data"
+
+    # Should not have any users in included
+    included_users = json['included']&.select { |inc| inc['type'] == 'test-users' } || []
+    assert_empty included_users, "Should not include any users"
+  end
+
+  def test_has_many_through_cross_schema_with_multiple_projects
+    # Test that has_many :through works correctly with multiple source records
+    project2 = TestProject.create!(name: 'Mobile App')
+
+    # Project 1 has user1 and user2
+    TestProjectMember.create!(test_project_id: @project.id, test_user_id: @user.id, role: 'developer')
+    TestProjectMember.create!(test_project_id: @project.id, test_user_id: @user2.id, role: 'manager')
+
+    # Project 2 has only user1
+    TestProjectMember.create!(test_project_id: project2.id, test_user_id: @user.id, role: 'lead')
+
+    # Create fragments for both projects
+    frag1_id = JSONAPI::ResourceIdentity.new(TestProjectResource, @project.id)
+    frag1 = JSONAPI::ResourceFragment.new(frag1_id)
+
+    frag2_id = JSONAPI::ResourceIdentity.new(TestProjectResource, project2.id)
+    frag2 = JSONAPI::ResourceFragment.new(frag2_id)
+
+    source_hash = { frag1_id => frag1, frag2_id => frag2 }
+
+    fragments = TestProjectResource.find_included_fragments(
+      source_hash,
+      :members,
+      { context: nil }
+    )
+
+    # Project 1 should have 2 members
+    assert_not_nil frag1.related[:members], "Project 1 should have members linkage"
+    project1_members = frag1.related[:members].to_a
+    assert_equal 2, project1_members.size, "Project 1 should have 2 members"
+    assert_equal [@user.id, @user2.id].sort, project1_members.map(&:id).sort
+
+    # Project 2 should have 1 member
+    assert_not_nil frag2.related[:members], "Project 2 should have members linkage"
+    project2_members = frag2.related[:members].to_a
+    assert_equal 1, project2_members.size, "Project 2 should have 1 member"
+    assert_equal @user.id, project2_members.first.id
+
+    # User1 should appear only once in fragments (deduped)
+    user_fragments = fragments.select { |rid, _| rid.resource_klass == TestUserResource }
+    assert_equal 2, user_fragments.size, "Should have 2 unique user fragments (user1 and user2)"
   end
 end
 
