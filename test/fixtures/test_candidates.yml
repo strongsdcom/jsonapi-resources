@@ -1,0 +1,13 @@
+candidate_with_recruiter:
+  id: 1
+  full_name: John Doe
+  email: john@example.com
+  recruiter_id: 1
+  location_id: 1
+
+candidate_without_recruiter:
+  id: 2
+  full_name: Jane Smith
+  email: jane@example.com
+  recruiter_id: null
+  location_id: 2
