@@ -1,0 +1,7 @@
+acme_corp:
+  id: 1
+  name: ACME Corp
+
+other_corp:
+  id: 2
+  name: Other Corp

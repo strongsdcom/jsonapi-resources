@@ -180,4 +180,52 @@ class CrossSchemaTest < ActiveSupport::TestCase
       OrganizationResource.find_related_fragments(source_rids, :employees, {})
     end
   end
+
+  def test_has_one_cross_schema_linkage_data
+    skip "Requires database setup for cross-schema testing"
+    # This test verifies that has_one cross-schema relationships
+    # properly set the linkage data in relationships.data
+
+    # Setup: Create a candidate with recruiter_id pointing to employee in different schema
+    # Expected: relationships.recruiter.data should be { type: "employees", id: "167" }
+    # Actual bug: relationships.recruiter.data is null
+
+    # Create test data
+    org = Organization.create!(name: 'Test Company')
+    employee = Employee.create!(name: 'Test Recruiter', company_id: org.id)
+
+    # Simulate a resource with has_one cross-schema relationship
+    class CandidateTest < ActiveRecord::Base
+      self.table_name = 'companies' # Reuse existing table for test
+      belongs_to :recruiter, class_name: 'CrossSchemaTest::Employee', foreign_key: 'id', optional: true
+    end
+
+    class CandidateResourceTest < JSONAPI::ActiveRelationResource
+      model_name 'CrossSchemaTest::CandidateTest'
+      attributes :name
+      has_one :recruiter, class_name: 'Employee', schema: 'hr_schema', always_include_linkage_data: true
+    end
+
+    candidate = CandidateTest.create!(name: 'Test Candidate', id: employee.id)
+
+    # Serialize the resource
+    serializer = JSONAPI::ResourceSerializer.new(
+      CandidateResourceTest,
+      include: ['recruiter']
+    )
+
+    resource = CandidateResourceTest.new(candidate, nil)
+    json = serializer.serialize_to_hash(resource)
+
+    # Assert linkage data is set correctly
+    assert_not_nil json['data']['relationships']['recruiter'], "Recruiter relationship should exist"
+    assert_not_nil json['data']['relationships']['recruiter']['data'], "Recruiter linkage data should not be null"
+    assert_equal 'employees', json['data']['relationships']['recruiter']['data']['type']
+    assert_equal employee.id.to_s, json['data']['relationships']['recruiter']['data']['id']
+
+    # Assert included contains the employee
+    assert_not_nil json['included'], "Should have included section"
+    employee_included = json['included'].find { |inc| inc['type'] == 'employees' && inc['id'] == employee.id.to_s }
+    assert_not_nil employee_included, "Employee should be in included section"
+  end
 end

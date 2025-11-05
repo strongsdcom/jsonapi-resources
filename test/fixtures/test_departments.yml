@@ -1,0 +1,9 @@
+engineering_dept:
+  id: 1
+  name: Engineering
+  manager_id: 3
+
+hr_dept:
+  id: 2
+  name: Human Resources
+  manager_id: 2

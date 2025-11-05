@@ -1,0 +1,7 @@
+location_kyiv:
+  id: 1
+  name: Kyiv
+
+location_lviv:
+  id: 2
+  name: Lviv

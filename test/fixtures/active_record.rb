@@ -2705,3 +2705,39 @@ $breed_data.add(Breed.new(0, 'persian'))
 $breed_data.add(Breed.new(1, 'siamese'))
 $breed_data.add(Breed.new(2, 'sphinx'))
 $breed_data.add(Breed.new(3, 'to_delete'))
+
+  # Cross-schema test tables (simulating recruitment and core_api schemas)
+  create_table :test_candidates, force: true do |t|
+    t.string :full_name
+    t.string :email
+    t.integer :recruiter_id  # Points to test_users
+    t.integer :location_id
+    t.timestamps null: false
+  end
+
+  create_table :test_users, force: true do |t|
+    t.string :first_name
+    t.string :last_name
+    t.string :email
+    t.timestamps null: false
+  end
+
+  create_table :test_locations, force: true do |t|
+    t.string :name
+    t.timestamps null: false
+  end
+
+  create_table :test_departments, force: true do |t|
+    t.string :name
+    t.integer :manager_id  # Points to test_users (many-to-one)
+    t.timestamps null: false
+  end
+
+  # Additional cross-schema test: Company has_many employees
+  create_table :test_companies, force: true do |t|
+    t.string :name
+    t.timestamps null: false
+  end
+
+  # Add company_id to test_users for has_many test
+  add_column :test_users, :company_id, :integer unless column_exists?(:test_users, :company_id)
