@@ -820,7 +820,16 @@ module JSONAPI
           # :nocov:
         else
           if quoted
-            "#{quote(table)}.#{quote(field)}"
+            # If table contains a dot (schema.table), it needs special handling
+            # e.g. "core_api.employees_v1" should become "core_api"."employees_v1"."field"
+            # not "core_api.employees_v1"."field"
+            if table.to_s.include?('.')
+              # Split schema and table, quote each separately
+              parts = table.to_s.split('.', 2)
+              "#{quote(parts[0])}.#{quote(parts[1])}.#{quote(field)}"
+            else
+              "#{quote(table)}.#{quote(field)}"
+            end
           else
             # :nocov:
             "#{table.to_s}.#{field.to_s}"
@@ -843,12 +852,16 @@ module JSONAPI
           end
           # :nocov:
         else
+          # Replace dots with underscores in table name for valid SQL alias
+          # e.g. "core_api.employees_v1" becomes "core_api_employees_v1"
+          table_for_alias = table.to_s.gsub('.', '_')
+
           if quoted
             # :nocov:
-            quote("#{table.to_s}_#{field.to_s}")
+            quote("#{table_for_alias}_#{field.to_s}")
             # :nocov:
           else
-            "#{table.to_s}_#{field.to_s}"
+            "#{table_for_alias}_#{field.to_s}"
           end
         end
       end

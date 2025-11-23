@@ -6,7 +6,7 @@ platforms :jruby do
   gem 'activerecord-jdbcsqlite3-adapter'
 end
 
-version = ENV['RAILS_VERSION'] || 'default'
+version = ENV['RAILS_VERSION'] || '8.0'
 
 platforms :ruby do
   gem 'pg'
@@ -24,6 +24,9 @@ case version
 when 'master'
   gem 'railties', { git: 'https://github.com/rails/rails.git' }
   gem 'arel', { git: 'https://github.com/rails/arel.git' }
+when '8.0'
+  gem 'railties', '~> 8.0.0'
+  gem 'activerecord', '~> 8.0.0'
 when 'default'
   gem 'railties', '~> 8.0.0'
   gem 'activerecord', '~> 8.0.0'
