@@ -1,0 +1,2 @@
+# Empty fixtures for cross-schema tests
+# These tables are used only in cross_schema_linkage_test.rb

@@ -2,6 +2,8 @@
 
 module JSONAPI
   class ActiveRelationResource < BasicResource
+    include CrossSchemaRelationships
+
     root_resource
 
     def find_related_ids(relationship, options = {})
@@ -521,6 +523,11 @@ module JSONAPI
         filters = options.fetch(:filters, {})
         source_ids = source_fragments.collect {|item| item.identity.id}
 
+        # Handle case where relationship is passed as a symbol/string instead of a Relationship object
+        if relationship.is_a?(Symbol) || relationship.is_a?(String)
+          relationship = _relationship(relationship.to_sym)
+        end
+
         resource_klass = relationship.resource_klass
         include_directives = options.fetch(:include_directives, {})
 
@@ -813,7 +820,16 @@ module JSONAPI
           # :nocov:
         else
           if quoted
-            "#{quote(table)}.#{quote(field)}"
+            # If table contains a dot (schema.table), it needs special handling
+            # e.g. "core_api.employees_v1" should become "core_api"."employees_v1"."field"
+            # not "core_api.employees_v1"."field"
+            if table.to_s.include?('.')
+              # Split schema and table, quote each separately
+              parts = table.to_s.split('.', 2)
+              "#{quote(parts[0])}.#{quote(parts[1])}.#{quote(field)}"
+            else
+              "#{quote(table)}.#{quote(field)}"
+            end
           else
             # :nocov:
             "#{table.to_s}.#{field.to_s}"
@@ -836,12 +852,16 @@ module JSONAPI
           end
           # :nocov:
         else
+          # Replace dots with underscores in table name for valid SQL alias
+          # e.g. "core_api.employees_v1" becomes "core_api_employees_v1"
+          table_for_alias = table.to_s.gsub('.', '_')
+
           if quoted
             # :nocov:
-            quote("#{table.to_s}_#{field.to_s}")
+            quote("#{table_for_alias}_#{field.to_s}")
             # :nocov:
           else
-            "#{table.to_s}_#{field.to_s}"
+            "#{table_for_alias}_#{field.to_s}"
           end
         end
       end

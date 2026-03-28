@@ -61,14 +61,26 @@ module JSONAPI
     def status
       status_codes = if has_errors?
                        @global_errors.collect do |error|
-                         error.status.to_i
+                         # Handle both numeric and symbol/string statuses
+                         if error.status.is_a?(String) && error.status.match(/^\d+$/)
+                           error.status.to_i
+                         elsif error.status.is_a?(String) || error.status.is_a?(Symbol)
+                           Rack::Utils::SYMBOL_TO_STATUS_CODE[error.status.to_sym] || 422
+                         else
+                           error.status.to_i
+                         end
                        end
                      else
                        @result_codes
                      end
 
-      # Count the unique status codes
-      counts = status_codes.each_with_object(Hash.new(0)) { |code, counts| counts[code] += 1 }
+      # Count the unique status codes, filtering out invalid codes
+      valid_codes = status_codes.select { |code| code.to_i > 0 }
+
+      # If no valid status codes, default to 200
+      return 200 if valid_codes.empty?
+
+      counts = valid_codes.each_with_object(Hash.new(0)) { |code, counts| counts[code] += 1 }
 
       # if there is only one status code we can return that
       return counts.keys[0].to_i if counts.length == 1
@@ -77,7 +89,7 @@ module JSONAPI
 
       # if there are many we should return the highest general code, 200, 400, 500 etc.
       max_status = 0
-      status_codes.each do |status|
+      valid_codes.each do |status|
         code = status.to_i
         max_status = code if max_status < code
       end

@@ -8,6 +8,11 @@ ActiveSupport::Inflector.inflections(:en) do |inflect|
 end
 
 ### DATABASE
+# Rails 8 requires special handling for foreign keys in SQLite during schema creation
+if Rails::VERSION::MAJOR >= 8 && ActiveRecord::Base.connection.adapter_name == 'SQLite'
+  ActiveRecord::Base.connection.execute("PRAGMA foreign_keys = OFF")
+end
+
 ActiveRecord::Schema.define do
   create_table :sessions, id: false, force: true do |t|
     t.string :id, :limit => 36, :primary_key => true, null: false
@@ -52,7 +57,7 @@ ActiveRecord::Schema.define do
   end
 
   create_table :posts, force: true do |t|
-    t.string     :title, length: 255
+    t.string     :title, limit: 255
     t.text       :body
     t.integer    :author_id
     t.integer    :parent_post_id
@@ -324,8 +329,13 @@ ActiveRecord::Schema.define do
 
   create_table :related_things, force: true  do |t|
     t.string :name
-    t.references :from, references: :thing
-    t.references :to, references: :thing
+    if Rails::VERSION::MAJOR >= 8
+      t.references :from, foreign_key: { to_table: :things }
+      t.references :to, foreign_key: { to_table: :things }
+    else
+      t.references :from, references: :thing
+      t.references :to, references: :thing
+    end
 
     t.timestamps null: false
   end
@@ -429,6 +439,58 @@ ActiveRecord::Schema.define do
     t.integer :version
     t.timestamps null: false
   end
+
+  # Cross-schema test tables (simulating recruitment and core_api schemas)
+  create_table :test_candidates, force: true do |t|
+    t.string :full_name
+    t.string :email
+    t.integer :recruiter_id  # Points to test_users
+    t.integer :location_id
+    t.timestamps null: false
+  end
+
+  create_table :test_users, force: true do |t|
+    t.string :first_name
+    t.string :last_name
+    t.string :email
+    t.integer :company_id
+    t.timestamps null: false
+  end
+
+  create_table :test_locations, force: true do |t|
+    t.string :name
+    t.timestamps null: false
+  end
+
+  create_table :test_departments, force: true do |t|
+    t.string :name
+    t.integer :manager_id  # Points to test_users (many-to-one)
+    t.timestamps null: false
+  end
+
+  # Additional cross-schema test: Company has_many employees
+  create_table :test_companies, force: true do |t|
+    t.string :name
+    t.timestamps null: false
+  end
+
+  # Tables for has_many :through cross-schema test
+  create_table :test_projects, force: true do |t|
+    t.string :name
+    t.timestamps null: false
+  end
+
+  create_table :test_project_members, force: true do |t|
+    t.integer :test_project_id
+    t.integer :test_user_id
+    t.string :role  # e.g., "developer", "manager"
+    t.timestamps null: false
+  end
+end
+
+# Re-enable foreign keys for SQLite after schema creation in Rails 8
+if Rails::VERSION::MAJOR >= 8 && ActiveRecord::Base.connection.adapter_name == 'SQLite'
+  ActiveRecord::Base.connection.execute("PRAGMA foreign_keys = ON")
 end
 
 ### MODELS
@@ -2690,3 +2752,4 @@ $breed_data.add(Breed.new(0, 'persian'))
 $breed_data.add(Breed.new(1, 'siamese'))
 $breed_data.add(Breed.new(2, 'sphinx'))
 $breed_data.add(Breed.new(3, 'to_delete'))
+

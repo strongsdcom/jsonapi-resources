@@ -23,8 +23,9 @@ end
 ENV['DATABASE_URL'] ||= "sqlite3:test_db"
 
 require 'active_record/railtie'
-require 'rails/test_help'
 require 'minitest/mock'
+# Load local version instead of installed gem
+$LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
 require 'jsonapi-resources'
 require 'pry'
 
@@ -42,7 +43,10 @@ JSONAPI.configure do |config|
   config.json_key_format = :camelized_key
 end
 
-ActiveSupport::Deprecation.silenced = true
+# Silence deprecation warnings for Rails 8.0
+if defined?(ActiveSupport::Deprecation) && ActiveSupport::Deprecation.respond_to?(:silenced=)
+  ActiveSupport::Deprecation.silenced = true
+end
 
 puts "Testing With RAILS VERSION #{Rails.version}"
 
@@ -56,7 +60,12 @@ class TestApp < Rails::Application
   config.action_controller.action_on_unpermitted_parameters = :raise
 
   ActiveRecord::Schema.verbose = false
-  config.active_record.schema_format = :none
+  # Rails 8 doesn't support :none schema_format
+  if Rails::VERSION::MAJOR < 8
+    config.active_record.schema_format = :none
+  else
+    config.active_record.schema_format = :ruby
+  end
   config.active_support.test_order = :random
 
   config.active_support.halt_callback_chains_on_return_false = false
@@ -66,6 +75,12 @@ class TestApp < Rails::Application
     config.active_record.sqlite3.represent_boolean_as_integer = true
   end
 end
+
+# Initialize the test application before requiring test_help in Rails 8
+TestApp.initialize!
+
+# Now require test_help after Rails.application is initialized
+require 'rails/test_help'
 
 DatabaseCleaner.allow_remote_database_url = true
 DatabaseCleaner.strategy = :transaction
@@ -189,8 +204,6 @@ def show_queries
     puts "sql[#{index}]: #{query}"
   end
 end
-
-TestApp.initialize!
 
 require File.expand_path('../fixtures/active_record', __FILE__)
 
@@ -460,12 +473,20 @@ class Minitest::Test
     true
   end
 
-  self.fixture_path = "#{Rails.root}/fixtures"
+  if Rails::VERSION::MAJOR >= 8
+    self.fixture_paths = ["#{Rails.root}/fixtures"]
+  else
+    self.fixture_path = "#{Rails.root}/fixtures"
+  end
   fixtures :all
 end
 
 class ActiveSupport::TestCase
-  self.fixture_path = "#{Rails.root}/fixtures"
+  if Rails::VERSION::MAJOR >= 8
+    self.fixture_paths = ["#{Rails.root}/fixtures"]
+  else
+    self.fixture_path = "#{Rails.root}/fixtures"
+  end
   fixtures :all
   setup do
     @routes = TestApp.routes
@@ -473,7 +494,11 @@ class ActiveSupport::TestCase
 end
 
 class ActionDispatch::IntegrationTest
-  self.fixture_path = "#{Rails.root}/fixtures"
+  if Rails::VERSION::MAJOR >= 8
+    self.fixture_paths = ["#{Rails.root}/fixtures"]
+  else
+    self.fixture_path = "#{Rails.root}/fixtures"
+  end
   fixtures :all
 
   def assert_jsonapi_response(expected_status, msg = nil)
